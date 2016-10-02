@@ -1,0 +1,14 @@
+{
+    "username": "ab1234@student.uni-lj.si",
+	//"password": "abcd1234",
+    "passwordCmd":  "secret-tool lookup user ab1234@student.uni-lj.si", // password from the secrets manager
+    "path":  "/home/ab/Downloads",
+    "rootURL": "https://ucilnica.fri.uni-lj.si",
+    "courses" : {
+        "krv": 93,
+        "p": 123,
+        "ivz": 92,
+        "m": 120,
+        "ia": 90
+    }
+}
