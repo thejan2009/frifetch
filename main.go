@@ -20,10 +20,6 @@ import (
 )
 
 func main() {
-	// c := login()
-	// crawl(c, "https://ucilnica.fri.uni-lj.si/course/view.php?id=93")
-	// testFetch(c)
-
 	conf, err := initConf()
 	if err != nil {
 		fmt.Println(err)
@@ -33,13 +29,15 @@ func main() {
 	c := login(conf)
 	for k, v := range conf.Courses {
 		url := fmt.Sprintf("%s/course/view.php?id=%d", conf.RootURL, v)
-		path := fmt.Sprintf("%s/%s", conf.Path, k)
-		fmt.Println(path)
-		if !fileExists(path) {
-			os.MkdirAll(path, 0700)
+		p := path.Join(conf.Path, k)
+		fmt.Println("Course", k, v)
+		if !fileExists(p) {
+			if err := os.MkdirAll(p, 0700); err != nil {
+				fmt.Println(err)
+				return
+			}
 		}
-		crawl(c, url, path)
-		break
+		crawl(c, url, p)
 	}
 }
 
@@ -98,6 +96,7 @@ func login(c Conf) *http.Client {
 	if err != nil {
 		fmt.Println(err)
 	}
+	fmt.Println("Login successful.")
 	return &client
 }
 
@@ -143,9 +142,14 @@ func dwn(c *http.Client, url, fileName string) {
 		fmt.Println(err)
 		return
 	}
-	defer f.Close()
 
 	_, err = io.Copy(f, res.Body)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = f.Close()
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -178,6 +182,7 @@ func links(r io.Reader) []string {
 
 			if t.Data == "a" {
 				for _, a := range t.Attr {
+					// TODO: figure out some other legal urls
 					if a.Key == "href" && strings.Contains(a.Val, "/resource/view.php") {
 						urls = append(urls, a.Val)
 					}
