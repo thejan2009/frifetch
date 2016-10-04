@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
 	"mime"
@@ -19,10 +20,23 @@ import (
 	"golang.org/x/net/html"
 )
 
+var update bool
+
 func main() {
-	conf, err := initConf()
+	flag.BoolVar(&update, "u", false, "Update all resources.")
+	list := flag.Bool("l", false, "List configured courses.")
+	flag.Parse()
+
+	conf, err := initConf(flag.Args())
 	if err != nil {
 		fmt.Println(err)
+		return
+	}
+
+	if *list {
+		for k, v := range conf.Courses {
+			fmt.Printf("%4s %d\n", k, v)
+		}
 		return
 	}
 
@@ -48,7 +62,7 @@ type Conf struct {
 	Courses                 map[string]int
 }
 
-func initConf() (Conf, error) {
+func initConf(course []string) (Conf, error) {
 	var c Conf
 
 	f, err := os.Open("conf.json")
@@ -77,6 +91,17 @@ func initConf() (Conf, error) {
 		}
 
 		c.Password = out.String()
+	}
+
+	if len(course) != 0 {
+		newCourses := make(map[string]int)
+		for _, v := range course {
+			if el, ok := c.Courses[v]; ok {
+				newCourses[v] = el
+			}
+		}
+		c.Courses = newCourses
+
 	}
 	return c, nil
 }
@@ -125,7 +150,7 @@ func fileExists(path string) bool {
 }
 
 func dwn(c *http.Client, url, fileName string) {
-	if fileExists(fileName) {
+	if !update && fileExists(fileName) {
 		fmt.Println(fileName, "exists")
 		return
 	}
