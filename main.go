@@ -6,18 +6,20 @@ import (
 	"fmt"
 	"io"
 	"mime"
-	"net/http"
-	"net/http/cookiejar"
-	"net/url"
-	"os"
 	"path"
 	"strings"
 
 	"encoding/json"
 
-	"os/exec"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 
 	"golang.org/x/net/html"
+
+	"os"
+	"os/exec"
+	"os/user"
 )
 
 var update bool
@@ -25,9 +27,10 @@ var update bool
 func main() {
 	flag.BoolVar(&update, "u", false, "Update all resources.")
 	list := flag.Bool("l", false, "List configured courses.")
+	config := flag.String("c", "~/.frifetch.json", "Configuration file location")
 	flag.Parse()
 
-	conf, err := initConf(flag.Args())
+	conf, err := initConf(findConf(config), flag.Args())
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -62,10 +65,22 @@ type Conf struct {
 	Courses                 map[string]int
 }
 
-func initConf(course []string) (Conf, error) {
+func findConf(config *string) string {
+	if strings.Contains(*config, "~") {
+		u, err := user.Current()
+		if err != nil {
+			fmt.Println(err)
+			return ""
+		}
+		return strings.Replace(*config, "~", u.HomeDir, 1)
+	}
+	return *config
+}
+
+func initConf(config string, course []string) (Conf, error) {
 	var c Conf
 
-	f, err := os.Open("conf.json")
+	f, err := os.Open(config)
 	if err != nil {
 		fmt.Println(err)
 		return c, err
