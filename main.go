@@ -54,7 +54,7 @@ func main() {
 				return
 			}
 		}
-		crawl(c, url, p)
+		crawl(c, true, url, p)
 	}
 }
 
@@ -140,19 +140,23 @@ func login(c Conf) *http.Client {
 	return &client
 }
 
-func crawl(c *http.Client, u, filePath string) {
+func crawl(c *http.Client, recurse bool, u, filePath string) {
 	res, _ := c.Get(u)
-	urls := links(res.Body)
+	urls := links(res.Body, recurse)
 	for _, v := range urls {
-		res, err := c.Head(v)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
+		if strings.Contains(v, "/folder/view.php") {
+			crawl(c, false, v, filePath)
+		} else {
+			res, err := c.Head(v)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
-		fileName := parseName(res.Header.Get("Content-Disposition"))
-		p := path.Join(filePath, fileName)
-		dwn(c, v, p)
+			fileName := parseName(res.Header.Get("Content-Disposition"))
+			p := path.Join(filePath, fileName)
+			dwn(c, v, p)
+		}
 	}
 }
 
@@ -207,7 +211,21 @@ func parseName(disp string) string {
 	return "empty"
 }
 
-func links(r io.Reader) []string {
+func validName(name string, recurse bool) bool {
+	if strings.Contains(name, "/resource/view.php") {
+		return true
+	}
+	if recurse && strings.Contains(name, "/folder/view.php") {
+		return true
+	}
+	if strings.Contains(name, "mod_folder/content/") {
+		return true
+	}
+
+	return false
+}
+
+func links(r io.Reader, recurse bool) []string {
 	var urls []string
 	z := html.NewTokenizer(r)
 
@@ -223,7 +241,7 @@ func links(r io.Reader) []string {
 			if t.Data == "a" {
 				for _, a := range t.Attr {
 					// TODO: figure out some other legal urls
-					if a.Key == "href" && strings.Contains(a.Val, "/resource/view.php") {
+					if a.Key == "href" && validName(a.Val, recurse) {
 						urls = append(urls, a.Val)
 					}
 				}
