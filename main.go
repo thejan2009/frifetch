@@ -221,6 +221,9 @@ func validName(name string, recurse bool) bool {
 	if strings.Contains(name, "mod_folder/content/") {
 		return true
 	}
+	if strings.Contains(name, "mod_label/intro/") {
+		return true
+	}
 
 	return false
 }
