@@ -153,7 +153,7 @@ func crawl(c *http.Client, recurse bool, u, filePath string) {
 				return
 			}
 
-			fileName := parseName(res.Header.Get("Content-Disposition"))
+			fileName := parseName(res.Header.Get("Content-Disposition"), v)
 			p := path.Join(filePath, fileName)
 			dwn(c, v, p)
 		}
@@ -200,13 +200,19 @@ func dwn(c *http.Client, url, fileName string) {
 	}
 }
 
-func parseName(disp string) string {
+func parseName(disp string, url string) string {
+	idPrefix := ""
+	parts := strings.Split(url, "?id=")
+	if len(parts) == 2 {
+		idPrefix = parts[1]
+	}
+
 	if disp == "" {
 		return "empty"
 	}
 	_, params, _ := mime.ParseMediaType(disp)
 	if name, ok := params["filename"]; ok {
-		return name
+		return idPrefix + name
 	}
 	return "empty"
 }
