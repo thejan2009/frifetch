@@ -45,7 +45,12 @@ func main() {
 
 	c := login(conf)
 	for k, v := range conf.Courses {
-		url := fmt.Sprintf("%s/course/view.php?id=%d", conf.RootURL, v)
+		var url string
+		if strings.Compare(k, "mvaje") == 0 {
+			url = fmt.Sprintf("%s/mod/page/view.php?id=%d", conf.RootURL, v)
+		} else {
+			url = fmt.Sprintf("%s/course/view.php?id=%d", conf.RootURL, v)
+		}
 		p := path.Join(conf.Path, k)
 		fmt.Println("Course", k, v)
 		if !fileExists(p) {
@@ -212,13 +217,19 @@ func parseName(disp string, url string) string {
 	}
 	_, params, _ := mime.ParseMediaType(disp)
 	if name, ok := params["filename"]; ok {
-		return idPrefix + name
+		if name == "slides.pdf" {
+			return idPrefix + name
+		}
+		return name
 	}
 	return "empty"
 }
 
 func validName(name string, recurse bool) bool {
 	if strings.Contains(name, "/resource/view.php") {
+		if strings.Contains(name, "ucilnica1112") {
+			return false
+		}
 		return true
 	}
 	if recurse && strings.Contains(name, "/folder/view.php") {
@@ -228,6 +239,9 @@ func validName(name string, recurse bool) bool {
 		return true
 	}
 	if strings.Contains(name, "mod_label/intro/") {
+		return true
+	}
+	if strings.Contains(name, "mod_page/content") {
 		return true
 	}
 
