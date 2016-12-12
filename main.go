@@ -175,7 +175,7 @@ func fileExists(path string) bool {
 
 func dwn(c *http.Client, url, fileName string) {
 	if !update && fileExists(fileName) {
-		fmt.Println(fileName, "exists")
+		// fmt.Println(fileName, "exists")
 		return
 	}
 	fmt.Println(fileName)
