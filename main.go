@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"path"
 	"strings"
@@ -25,38 +26,33 @@ import (
 var update bool
 
 func main() {
+	var (
+		list       bool
+		configPath string
+	)
+
 	flag.BoolVar(&update, "u", false, "Update all resources.")
-	list := flag.Bool("l", false, "List configured courses.")
-	config := flag.String("c", "~/.frifetch.json", "Configuration file location")
+	flag.BoolVar(&list, "l", false, "List configured courses.")
+	flag.StringVar(&configPath, "c", "~/.frifetch.json", "Configuration file location")
 	flag.Parse()
 
-	conf, err := initConf(findConf(config), flag.Args())
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	conf := initConf(findConf(configPath), flag.Args())
 
-	if *list {
+	if list {
 		for k, v := range conf.Courses {
-			fmt.Printf("%4s %d\n", k, v)
+			log.Printf("%4s %d\n", k, v)
 		}
 		return
 	}
 
 	c := login(conf)
 	for k, v := range conf.Courses {
-		var url string
-		if strings.Compare(k, "mvaje") == 0 {
-			url = fmt.Sprintf("%s/mod/page/view.php?id=%d", conf.RootURL, v)
-		} else {
-			url = fmt.Sprintf("%s/course/view.php?id=%d", conf.RootURL, v)
-		}
+		url := fmt.Sprintf("%s/course/resources.php?id=%d", conf.RootURL, v)
 		p := path.Join(conf.Path, k)
-		fmt.Println("Course", k, v)
+		log.Println("Course", k, v)
 		if !fileExists(p) {
 			if err := os.MkdirAll(p, 0700); err != nil {
-				fmt.Println(err)
-				return
+				log.Fatal(err)
 			}
 		}
 		crawl(c, true, url, p)
@@ -70,32 +66,29 @@ type Conf struct {
 	Courses                 map[string]int
 }
 
-func findConf(config *string) string {
-	if strings.Contains(*config, "~") {
+func findConf(configPath string) string {
+	if strings.Contains(configPath, "~") {
 		u, err := user.Current()
 		if err != nil {
-			fmt.Println(err)
-			return ""
+			log.Fatal(err)
 		}
-		return strings.Replace(*config, "~", u.HomeDir, 1)
+		return strings.Replace(configPath, "~", u.HomeDir, 1)
 	}
-	return *config
+	return configPath
 }
 
-func initConf(config string, course []string) (Conf, error) {
+func initConf(config string, course []string) Conf {
 	var c Conf
 
 	f, err := os.Open(config)
 	if err != nil {
-		fmt.Println(err)
-		return c, err
+		log.Fatal(err)
 	}
-	d := json.NewDecoder(f)
 
+	d := json.NewDecoder(f)
 	err = d.Decode(&c)
 	if err != nil {
-		fmt.Println(err)
-		return c, err
+		log.Fatal(err)
 	}
 
 	if c.PasswordCmd != "" {
@@ -107,7 +100,7 @@ func initConf(config string, course []string) (Conf, error) {
 
 		err := cmd.Run()
 		if err != nil {
-			return c, err
+			log.Fatal(err)
 		}
 
 		c.Password = out.String()
@@ -121,9 +114,9 @@ func initConf(config string, course []string) (Conf, error) {
 			}
 		}
 		c.Courses = newCourses
-
 	}
-	return c, nil
+
+	return c
 }
 
 func login(c Conf) *http.Client {
@@ -139,9 +132,8 @@ func login(c Conf) *http.Client {
 
 	_, err := client.PostForm(loginURL, f)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
-	fmt.Println("Login successful.")
 	return &client
 }
 
@@ -160,7 +152,7 @@ func crawl(c *http.Client, recurse bool, u, filePath string) {
 
 			fileName := parseName(res.Header.Get("Content-Disposition"), v)
 			p := path.Join(filePath, fileName)
-			dwn(c, v, p)
+			fetch(c, v, p)
 		}
 	}
 }
@@ -173,34 +165,33 @@ func fileExists(path string) bool {
 	return false
 }
 
-func dwn(c *http.Client, url, fileName string) {
+func fetch(c *http.Client, url, fileName string) {
 	if !update && fileExists(fileName) {
-		// fmt.Println(fileName, "exists")
 		return
 	}
-	fmt.Println(fileName)
+	log.Println(fileName)
 
 	res, err := c.Get(url)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 
 	f, err := os.Create(fileName)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 
 	_, err = io.Copy(f, res.Body)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 
 	err = f.Close()
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 }
@@ -213,36 +204,41 @@ func parseName(disp string, url string) string {
 	}
 
 	if disp == "" {
+		if idPrefix != "" {
+			return idPrefix
+		}
 		return "empty"
 	}
 	_, params, _ := mime.ParseMediaType(disp)
 	if name, ok := params["filename"]; ok {
-		if name == "slides.pdf" {
-			return idPrefix + name
-		}
 		return name
 	}
 	return "empty"
 }
 
 func validName(name string, recurse bool) bool {
-	if strings.Contains(name, "/resource/view.php") {
-		if strings.Contains(name, "ucilnica1112") {
-			return false
+	examples := []struct {
+		matcher string
+		recurse bool
+	}{
+		{"/resource/view.php", false},
+		{"/folder/view.php", true},
+		{"/resource/view.php", false},
+		{"mod_label/intro/", false},
+		{"mod_page/content", false},
+	}
+
+	for _, v := range examples {
+		if v.recurse {
+			if recurse && strings.Contains(name, v.matcher) {
+				return true
+			}
+			continue
 		}
-		return true
-	}
-	if recurse && strings.Contains(name, "/folder/view.php") {
-		return true
-	}
-	if strings.Contains(name, "mod_folder/content/") {
-		return true
-	}
-	if strings.Contains(name, "mod_label/intro/") {
-		return true
-	}
-	if strings.Contains(name, "mod_page/content") {
-		return true
+
+		if strings.Contains(name, v.matcher) {
+			return true
+		}
 	}
 
 	return false
@@ -272,3 +268,5 @@ func links(r io.Reader, recurse bool) []string {
 		}
 	}
 }
+
+// https://ucilnica.fri.uni-lj.si/theme/image.php/clean/core/1482534895/f/pdf-24
