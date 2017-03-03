@@ -211,6 +211,9 @@ func parseName(disp string, url string) string {
 	}
 	_, params, _ := mime.ParseMediaType(disp)
 	if name, ok := params["filename"]; ok {
+		if name == "dm_predavanja.pdf" {
+			return idPrefix + name
+		}
 		return name
 	}
 	return "empty"
